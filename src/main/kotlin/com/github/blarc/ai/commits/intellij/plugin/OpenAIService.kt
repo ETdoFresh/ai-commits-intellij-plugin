@@ -51,7 +51,8 @@ class OpenAIService {
         )
 
         val completion: ChatCompletion = openAI.chatCompletion(chatCompletionRequest)
-        return completion.choices[0].message.content ?: "API returned an empty response."
+        val content = completion.choices[0].message.content ?: "API returned an empty response."
+        return content.trim()
     }
 
     suspend fun refreshOpenAIModelIds() {
