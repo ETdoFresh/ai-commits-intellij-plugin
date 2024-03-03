@@ -18,6 +18,8 @@ import io.ktor.client.request.url
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.call.body
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
@@ -92,13 +94,32 @@ class OpenAIService {
                 models.add(Model(
                         created = it.jsonObject["created"]?.jsonPrimitive?.long ?: 0,
                         id = ModelId(it.jsonObject["id"]?.jsonPrimitive?.content ?: ""),
-                        ownedBy = "system"
+                        ownedBy = it.jsonObject["owned_by"]?.jsonPrimitive?.content ?: "system"
                 ))
             }
             return models
         }
         catch (_: Exception) {
-            throw Exception("Failed to retrieve models from OpenAI API.")
+            // Try once more using raw JsonObject/JsonArray
+        }
+        try {
+            val requester = openAI.javaClass.getDeclaredField("requester").apply { isAccessible = true }.get(openAI)
+            val httpClient = requester.javaClass.getDeclaredField("httpClient").apply { isAccessible = true }.get(requester) as HttpClient;
+            val response: HttpResponse = httpClient.get { url(path = "models") }
+            var jsonObject = response.body<JsonObject>()
+            var jsonArray = jsonObject["data"]?.jsonArray ?: throw Exception("No data in response")
+            val models = mutableListOf<Model>()
+            jsonArray.forEach {
+                models.add(Model(
+                        created = it.jsonObject["created"]?.jsonPrimitive?.long ?: 0,
+                        id = ModelId(it.jsonObject["id"]?.jsonPrimitive?.content ?: ""),
+                        ownedBy = it.jsonObject["owned_by"]?.jsonPrimitive?.content ?: "system"
+                ))
+            }
+            return models
+        }
+        catch (e: Exception) {
+            throw Exception("Failed to retrieve models from OpenAI API: ${e.message}")
         }
     }
 }
